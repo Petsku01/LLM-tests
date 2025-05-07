@@ -1,0 +1,48 @@
+Setup Instructions
+Toimivat 2024
+
+1. Install Dependencies:
+   Python:
+   bash
+
+pip install torch tokenizers tqdm flask werkzeug PyPDF2 pytesseract Pillow
+
+Tessaract is the best
+GOD-tier
+
+Tesseract OCR:
+
+    Windows: Dowload from https://github.com/UB-Mannheim/tesseract/wiki, add to PATH.
+    Linux: sudo apt-get install tesseract-ocr tesseract-ocr-fin
+    Mac: brew install tesseract tesseract-lang
+
+Node.js (optional, for React dev):
+bash
+
+npm install axios tailwindcss
+
+2. Run Backend:
+
+Save app.py and run:
+bash
+
+python app.py
+
+On Default Flask runs on http://localhost:5000.
+
+
+3. Run Frontend:
+
+Save index.html and open in a browser (uses CDN).
+For development, use create-react-app and serve locally.
+
+4. Upload Files:
+
+Text: .txt files (e.g., Kalevala from https://www.gutenberg.org/ebooks/5186).
+PDF: Digital or scanned PDFs (e.g., SKVR from https://skvr.fi).
+Images: Scanned manuscripts or photos (e.g., Agricola’s Abckiria).
+
+5. Train and Generate:
+
+  Upload files, click “Start Training,” then “Generate.”
+  Training takes ~30-60 minutes/epoch on a 16GB GPU.
