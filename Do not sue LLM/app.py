@@ -22,8 +22,8 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 ALLOWED_EXTENSIONS = {'txt', 'pdf', 'jpg', 'jpeg', 'png'}
 
-# Hyperparameters
-vocab_size = 20000  # For Finnish morphology
+# Parmeters
+vocab_size = 20000  # For CPU-killer
 embed_dim = 512     # Large embeddings
 num_layers = 24     # Large transformer
 num_heads = 16      # More attention heads
@@ -36,7 +36,7 @@ learning_rate = 2e-4
 warmup_steps = 2000
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# Transformer model
+# Transforming model
 class TransformerLLM(nn.Module):
     def __init__(self):
         super(TransformerLLM, self).__init__()
@@ -71,7 +71,7 @@ class TransformerLLM(nn.Module):
         logits = self.fc(x)
         return logits
 
-# Global model and tokenizer
+# Global model and tokens
 model = None
 tokenizer = None
 dataset_text = ""
@@ -101,7 +101,7 @@ def process_file(filepath):
         return ""
     return ""
 
-# Train tokenizer
+# Train tokenizing
 def train_tokenizer(text):
     global tokenizer
     tokenizer = Tokenizer(BPE())
