@@ -1,0 +1,29 @@
+# Konfiguraatioasetukset tietojenkäsittelyjärjestelmälle
+min_content_length: 10
+max_content_length: 1000000
+validation_entity_threshold: 1
+validation_token_threshold: 5
+bm25_weight: 0.4
+semantic_weight: 0.6
+max_answers: 5
+# Tuetut tiedostopäätteet
+supported_extensions:
+  - .pdf
+  - .txt
+  - .md
+  - .png
+  - .jpg
+  - .jpeg
+  - .docx
+  - .csv
+  - .zip
+quality_threshold: 0.7
+summary_ratio: 0.5
+use_sentiment_validation: true
+sentiment_threshold: 0.05
+# Mukautetut validointisäännöt
+custom_validation_rules: []
+embedding_compression_level: 5
+items_per_page: 20
+cache_ttl: 3600
+anomaly_threshold: 0.1

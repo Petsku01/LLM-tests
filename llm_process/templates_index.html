@@ -1,0 +1,83 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Etusivu</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+    <div class="container mx-auto p-4">
+        <!-- Otsikko ja navigointivalikko -->
+        <h1 class="text-2xl font-bold mb-4">Tervetuloa tietojenkäsittelyjärjestelmään</h1>
+        <nav class="mb-4">
+            <ul class="flex space-x-4">
+                <li><a href="{{ url_for('upload') }}" class="text-blue-500 hover:underline">Lataa</a></li>
+                <li><a href="{{ url_for('question') }}" class="text-blue-500 hover:underline">Kysymys</a></li>
+                <li><a href="{{ url_for('query_builder') }}" class="text-blue-500 hover:underline">Kyselyn rakentaja</a></li>
+                <li><a href="{{ url_for('list_data') }}" class="text-blue-500 hover:underline">Listaa</a></li>
+                <li><a href="{{ url_for('update') }}" class="text-blue-500 hover:underline">Päivitä</a></li>
+                <li><a href="{{ url_for('delete') }}" class="text-blue-500 hover:underline">Poista</a></li>
+                <li><a href="{{ url_for('restore') }}" class="text-blue-500 hover:underline">Palauta</a></li>
+                <li><a href="{{ url_for('review') }}" class="text-blue-500 hover:underline">Tarkista</a></li>
+                <li><a href="{{ url_for('export') }}" class="text-blue-500 hover:underline">Vie</a></li>
+                <li><a href="{{ url_for('backup') }}" class="text-blue-500 hover:underline">Varmuuskopio</a></li>
+                <li><a href="{{ url_for('analytics') }}" class="text-blue-500 hover:underline">Analytiikka</a></li>
+                <li><a href="{{ url_for('health') }}" class="text-blue-500 hover:underline">Terveys</a></li>
+                <li><a href="{{ url_for('help') }}" class="text-blue-500 hover:underline">Ohje</a></li>
+                <li><a href="{{ url_for('logout') }}" class="text-blue-500 hover:underline">Kirjaudu ulos</a></li>
+            </ul>
+        </nav>
+        <!-- Järjestelmän terveystiedot -->
+        <h2 class="text-xl font-semibold mb-2">Järjestelmän terveys</h2>
+        <p>{{ health }}</p>
+    </div>
+    <!-- Teeman vaihto -->
+    <script>
+        if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark')
+        } else {
+            document.documentElement.classList.remove('dark')
+        }
+    </script>
+</body>
+</html>
