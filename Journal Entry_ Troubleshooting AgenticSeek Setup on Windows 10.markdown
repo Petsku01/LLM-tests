@@ -1,8 +1,10 @@
 # Journal Entry: Troubleshooting AgenticSeek Setup on Windows 10
 
+https://github.com/Fosowl/agenticSeek
+
 *Date: June 12, 2025*
 
-Setting up AgenticSeek, an open-source AI research tool, on my Windows 10 machine was a rollercoaster of debugging batch scripts, Docker quirks, and PowerShell nuances. What I thought would be a quick setup—cloning the repository, configuring a few files, and launching services—turned into a deep dive into error messages and environment tweaks. Here’s a recount of my journey, the challenges I tackled, and the progress made toward getting AgenticSeek running.
+Setting up AgenticSeek, an open-source AI research tool, on my Windows 10 machine was a rollercoaster of debugging batch scripts, Docker issues, and PowerShell diagnostics. What I thought would be a quick setup—cloning the repository, configuring a few files, and launching services—turned into a dive into error messages and environment tweaks. Here’s a recount of my trials, the challenges I tackled, and the progress made toward getting AgenticSeek running.
 
 ## The Goal
 AgenticSeek offers a local AI research environment with Docker containers for services like SearxNG, Redis, a frontend, and a backend, powered by a local LLM (like Deepseek-R1 via Ollama). My aim was to set it up in my project directory, start the services, and access the web interface at `http://localhost:3000` to try queries like “Make a snake game in Python!” The README guided me to clone the repo, rename `.env.example` to `.env`, configure `config.ini`, and run `start start_services.cmd full` to spin up Docker containers. It sounded straightforward, but Windows had other plans.
@@ -31,7 +33,7 @@ for /f %%i in ('powershell -command "[System.Web.Security.Membership]::GenerateP
 Testing this command standalone revealed a new error: **“The filename, directory name, or volume label syntax is incorrect”**. The PowerShell command worked alone, producing a 64-character password with special characters, but these (e.g., `&`, `>`) broke Command Prompt’s parsing. I switched to a safer alphanumeric generator:
 
 ```cmd
-for /f "tokens=*" %i in ('powershell -command "$chars = \"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789\"; -join ($chars.ToCharArray() | Get-Random -Count 64)"') do set SEARXNG_SECRET_KEY=%i
+for /f "tokens=*" %i in ('powershell -command "$chars = \"\"; -join ($chars.ToCharArray() | Get-Random -Count 64)"') do set SEARXNG_SECRET_KEY=%i
 ```
 
 This hit a snag due to PowerShell’s quoting (`''...''` syntax). After adjusting to double quotes, I got a valid key, but the script still threw the “use” error, suggesting a deeper issue or environment quirk.
@@ -45,9 +47,9 @@ Building 52.8s (7/24) docker:desktop-linux
 => [backend 1/19] FROM docker.io/library/python:3.11-slim
 ```
 
-This was a breakthrough! The script was executing `docker compose up -d backend`, pulling the `python:3.11-slim` image, and building the custom `backend` image. The build was at 52.8 seconds, transferring a 4.23MB context, and still running. The README warned that image downloads could take 30 minutes, so the slowness was expected. A minor warning about `FROM --platform=linux/amd64` in the Dockerfile was noted but didn’t affect my x86_64 system.
+This was the breakthrough! The script was executing `docker compose up -d backend`, pulling the `python:3.11-slim` image, and building the custom `backend` image. The build was at 52.8 seconds, transferring a 4.23MB context, and still running. The README explained that image downloads could take 30 minutes, so the slowness was expected. A minor warning about `FROM --platform=linux/amd64` in the Dockerfile there for a while but didn’t affect my x64 system.
 
-I monitored the build with `docker ps` and `docker compose logs backend`, confirming it was in progress. The slow pace could be due to my system’s 8GB RAM and 8 CPUs (per `docker info`) or network speed. I suggested increasing Docker Desktop’s resource allocation and ensuring a stable connection.
+I monitored the build with `docker ps` and `docker compose logs backend`, confirming it was in progress. The  pace could be due to my system’s 8GB RAM and 8 CPUs (per `docker info`) or network speed. 
 
 ## Reflections and Next Steps
 The build’s progress is promising, but the “use was unexpected” error looms, possibly resurfacing after the build if the script’s `docker compose --profile full up -d` step fails. The updated `start_services.cmd` with a safe key generator and Windows-compatible syntax should help. As a fallback, I tested `docker compose` commands directly:
