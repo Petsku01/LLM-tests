@@ -1,4 +1,3 @@
-```python
 """
 A theory Markov Chain-based language model for character-level text generation.
 Designed for educational purposes with robust error handling and clear documentation.
