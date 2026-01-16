@@ -1,0 +1,1454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM Architecture Visualizer</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%);
+            color: #ffffff;
+            overflow: hidden;
+        }
+        
+        #container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        #canvas-container {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .ui-panel {
+            position: absolute;
+            background: rgba(20, 20, 40, 0.9);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+        
+        .top-panel {
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            height: auto;
+            text-align: center;
+        }
+        
+        .control-panel {
+            top: 120px;
+            left: 20px;
+            width: 280px;
+        }
+        
+        .info-panel {
+            top: 120px;
+            right: 20px;
+            width: 300px;
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+        
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            background: linear-gradient(45deg, #00d4ff, #ff006e, #8338ec);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        h2 {
+            color: #00d4ff;
+            margin-bottom: 15px;
+            font-size: 1.2em;
+        }
+        
+        .control-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #b0b0b0;
+            font-size: 0.9em;
+        }
+        
+        select, input[type="range"] {
+            width: 100%;
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            color: white;
+        }
+        
+        input[type="range"] {
+            height: 6px;
+            -webkit-appearance: none;
+            background: linear-gradient(90deg, #00d4ff, #8338ec);
+            border-radius: 3px;
+        }
+        
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            background: #ffffff;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 0.9em;
+        }
+        
+        .metric-value {
+            color: #00d4ff;
+            font-weight: bold;
+        }
+        
+        .layer-info {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            border-left: 3px solid #ff006e;
+        }
+        
+        .attention-head {
+            width: 12px;
+            height: 12px;
+            background: #00d4ff;
+            border-radius: 50%;
+            display: inline-block;
+            margin: 2px;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 0.6; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.1); }
+        }
+        
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 1.2em;
+            color: #00d4ff;
+        }
+
+        .subtitle {
+            color: #b0b0b0;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div class="ui-panel top-panel">
+            <h1>Neural Architecture Explorer</h1>
+            <p class="subtitle">Interactive 3D Visualization of Large Language Model Components</p>
+        </div>
+        
+        <div class="ui-panel control-panel">
+            <h2>Architecture Controls</h2>
+            
+            <div class="control-group">
+                <label>Model Type</label>
+                <select id="modelType">
+                    <option value="gpt">GPT (Decoder-Only)</option>
+                    <option value="bert">BERT (Encoder-Only)</option>
+                    <option value="t5">T5 (Encoder-Decoder)</option>
+                    <option value="custom">Custom Architecture</option>
+                </select>
+            </div>
+            
+            <div class="control-group">
+                <label>Layers: <span id="layerCount">12</span></label>
+                <input type="range" id="layers" min="1" max="48" value="12">
+            </div>
+            
+            <div class="control-group">
+                <label>Attention Heads: <span id="headCount">12</span></label>
+                <input type="range" id="heads" min="1" max="32" value="12">
+            </div>
+            
+            <div class="control-group">
+                <label>Hidden Dimension: <span id="hiddenDim">768</span></label>
+                <input type="range" id="dimension" min="128" max="4096" value="768" step="64">
+            </div>
+            
+            <div class="control-group">
+                <label>Animation Speed: <span id="speedValue">1.0x</span></label>
+                <input type="range" id="speed" min="0.1" max="3.0" value="1.0" step="0.1">
+            </div>
+        </div>
+        
+        <div class="ui-panel info-panel">
+            <h2>Architecture Analysis</h2>
+            
+            <div class="metric">
+                <span>Parameters:</span>
+                <span class="metric-value" id="paramCount">124.4M</span>
+            </div>
+            
+            <div class="metric">
+                <span>Memory (FP16):</span>
+                <span class="metric-value" id="memoryUsage">248.8 MB</span>
+            </div>
+            
+            <div class="metric">
+                <span>FLOPS/Token:</span>
+                <span class="metric-value" id="flopsCount">24.6B</span>
+            </div>
+            
+            <div class="layer-info">
+                <h3 style="color: #ff006e; margin-bottom: 8px;">Active Layer: <span id="activeLayer">1</span></h3>
+                <div>Attention Pattern: Multi-Head Self-Attention</div>
+                <div style="margin-top: 8px;">
+                    Heads: 
+                    <div id="headVisual" style="margin-top: 4px;"></div>
+                </div>
+            </div>
+            
+            <div class="layer-info">
+                <h3 style="color: #8338ec; margin-bottom: 8px;">Information Flow</h3>
+                <div>• Token Embeddings → Position Encoding</div>
+                <div>• Multi-Head Attention → Add & Norm</div>
+                <div>• Feed Forward → Add & Norm</div>
+                <div>• Output Projection</div>
+            </div>
+            
+            <div class="layer-info">
+                <h3 style="color: #00d4ff; margin-bottom: 8px;">Performance Metrics</h3>
+                <div class="metric">
+                    <span>Attention Complexity:</span>
+                    <span class="metric-value">O(n²d)</span>
+                </div>
+                <div class="metric">
+                    <span>Layer Throughput:</span>
+                    <span class="metric-value" id="throughput">2.4k tok/s</span>
+                </div>
+            </div>
+        </div>
+        
+        <div id="canvas-container"></div>
+        <div class="loading" id="loading">Initializing Neural Architecture...</div>
+    </div>
+
+    <script>
+        /**
+         * LLM Architecture Visualizer
+         * Interactive 3D visualization of transformer-based language models
+         * Demonstrates neural network architecture with real-time parameter calculations
+         */
+
+        // ============================================================================
+        // GLOBAL VARIABLES AND CONFIGURATION
+        // ============================================================================
+        
+        let scene, camera, renderer, composer;  // Three.js core objects
+        let architecture = [];                   // Array to store layer objects
+        let animationId;                        // Animation frame ID for cleanup
+        let time = 0;                          // Global time counter for animations
+        let currentLayer = 0;                  // Currently highlighted layer index
+        let isInitialized = false;             // Prevent multiple initializations
+        
+        // Default architecture parameters - matches GPT-base configuration
+        let params = {
+            layers: 12,        // Number of transformer layers
+            heads: 12,         // Number of attention heads per layer
+            dimension: 768,    // Hidden dimension size
+            speed: 1.0,        // Animation speed multiplier
+            modelType: 'gpt'   // Model architecture type
+        };
+
+        // ============================================================================
+        // SCENE INITIALIZATION AND SETUP
+        // ============================================================================
+
+        /**
+         * Initialize the 3D scene with camera, renderer, lighting and initial architecture
+         * Includes comprehensive error handling for WebGL compatibility
+         */
+        function initScene() {
+            try {
+                // Prevent multiple initializations
+                if (isInitialized) {
+                    console.warn('Scene already initialized');
+                    return;
+                }
+
+                const container = document.getElementById('canvas-container');
+                if (!container) {
+                    throw new Error('Canvas container not found');
+                }
+
+                // Check WebGL support
+                if (!isWebGLSupported()) {
+                    showError('WebGL is not supported in this browser. Please use a modern browser with WebGL support.');
+                    return;
+                }
+                
+                // Scene setup with fog for depth perception
+                scene = new THREE.Scene();
+                scene.fog = new THREE.Fog(0x000000, 50, 200);
+                
+                // Camera setup - perspective camera for 3D visualization
+                camera = new THREE.PerspectiveCamera(
+                    75,                                    // Field of view
+                    window.innerWidth / window.innerHeight, // Aspect ratio
+                    0.1,                                   // Near clipping plane
+                    1000                                   // Far clipping plane
+                );
+                camera.position.set(0, 20, 40);
+                camera.lookAt(0, 0, 0);
+                
+                // Renderer setup with anti-aliasing and shadows
+                renderer = new THREE.WebGLRenderer({ 
+                    antialias: true, 
+                    alpha: true,
+                    powerPreference: "high-performance" // Request high-performance GPU
+                });
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Cap pixel ratio for performance
+                renderer.shadowMap.enabled = true;
+                renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                
+                // Error handling for renderer creation
+                renderer.domElement.addEventListener('webglcontextlost', handleContextLoss, false);
+                renderer.domElement.addEventListener('webglcontextrestored', handleContextRestore, false);
+                
+                container.appendChild(renderer.domElement);
+                
+                // Lighting setup for dramatic visual effect
+                setupLighting();
+                
+                // Create initial neural network architecture
+                createArchitecture();
+                
+                // Start the animation loop
+                animate();
+                
+                // Hide loading indicator
+                const loadingElement = document.getElementById('loading');
+                if (loadingElement) {
+                    loadingElement.style.display = 'none';
+                }
+
+                isInitialized = true;
+                console.log('Scene initialized successfully');
+
+            } catch (error) {
+                console.error('Failed to initialize scene:', error);
+                showError(`Failed to initialize 3D visualization: ${error.message}`);
+            }
+        }
+
+        /**
+         * Setup lighting for the 3D scene
+         * Creates ambient light and colored point lights for visual appeal
+         */
+        function setupLighting() {
+            try {
+                // Ambient light for overall scene illumination
+                const ambientLight = new THREE.AmbientLight(0x404040, 0.3);
+                scene.add(ambientLight);
+                
+                // Main directional light (blue-tinted)
+                const directionalLight = new THREE.DirectionalLight(0x00d4ff, 1);
+                directionalLight.position.set(10, 10, 5);
+                directionalLight.castShadow = true;
+                directionalLight.shadow.mapSize.width = 2048;
+                directionalLight.shadow.mapSize.height = 2048;
+                scene.add(directionalLight);
+                
+                // Accent lighting with different colors
+                const pointLight1 = new THREE.PointLight(0xff006e, 0.8, 100);
+                pointLight1.position.set(-20, 10, 20);
+                scene.add(pointLight1);
+                
+                const pointLight2 = new THREE.PointLight(0x8338ec, 0.8, 100);
+                pointLight2.position.set(20, 10, -20);
+                scene.add(pointLight2);
+
+            } catch (error) {
+                console.error('Failed to setup lighting:', error);
+                // Continue without advanced lighting if it fails
+            }
+        }
+
+        // ============================================================================
+        // ARCHITECTURE CREATION AND MANAGEMENT
+        // ============================================================================
+
+        /**
+         * Create the complete neural network architecture visualization
+         * Builds transformer layers with attention mechanisms and feed-forward networks
+         */
+        function createArchitecture() {
+            try {
+                // Validate parameters before creating architecture
+                if (!validateParameters()) {
+                    console.error('Invalid parameters detected');
+                    return;
+                }
+
+                // Clear existing architecture to prevent memory leaks
+                cleanupArchitecture();
+                
+                const layerSpacing = 6;  // Vertical spacing between layers
+                const startY = -(params.layers * layerSpacing) / 2;  // Center the architecture
+                
+                // Create each transformer layer
+                for (let i = 0; i < params.layers; i++) {
+                    try {
+                        const layerGroup = new THREE.Group();
+                        const y = startY + i * layerSpacing;
+                        layerGroup.position.y = y;
+                        
+                        // Create the core components of a transformer layer
+                        const layer = createLayer(i, y);
+                        if (!layer) {
+                            console.warn(`Failed to create layer ${i}, skipping`);
+                            continue;
+                        }
+                        
+                        // Add components to the layer group
+                        layerGroup.add(layer.attention);
+                        layerGroup.add(layer.feedforward);
+                        layerGroup.add(layer.connections);
+                        
+                        // Add animated data flow visualization
+                        const particles = createDataFlow(y);
+                        if (particles) {
+                            layerGroup.add(particles);
+                        }
+                        
+                        scene.add(layerGroup);
+                        
+                        // Store layer reference for animation and cleanup
+                        architecture.push({
+                            group: layerGroup,
+                            attention: layer.attention,
+                            feedforward: layer.feedforward,
+                            connections: layer.connections,
+                            particles: particles,
+                            index: i
+                        });
+
+                    } catch (layerError) {
+                        console.error(`Error creating layer ${i}:`, layerError);
+                        // Continue with other layers even if one fails
+                    }
+                }
+                
+                // Update UI metrics based on new architecture
+                updateMetrics();
+                console.log(`Architecture created with ${architecture.length} layers`);
+
+            } catch (error) {
+                console.error('Failed to create architecture:', error);
+                showError('Failed to create neural network visualization');
+            }
+        }
+
+        /**
+         * Clean up existing architecture to prevent memory leaks
+         */
+        function cleanupArchitecture() {
+            architecture.forEach(layer => {
+                if (layer.group && layer.group.parent) {
+                    // Dispose of geometries and materials
+                    layer.group.traverse((child) => {
+                        if (child.geometry) child.geometry.dispose();
+                        if (child.material) {
+                            if (Array.isArray(child.material)) {
+                                child.material.forEach(material => material.dispose());
+                            } else {
+                                child.material.dispose();
+                            }
+                        }
+                    });
+                    scene.remove(layer.group);
+                }
+            });
+            architecture = [];
+        }
+
+        /**
+         * Validate architecture parameters
+         * @returns {boolean} True if parameters are valid
+         */
+        function validateParameters() {
+            if (params.layers < 1 || params.layers > 48) {
+                console.error('Invalid layer count:', params.layers);
+                return false;
+            }
+            if (params.heads < 1 || params.heads > 32) {
+                console.error('Invalid head count:', params.heads);
+                return false;
+            }
+            if (params.dimension < 64 || params.dimension > 8192) {
+                console.error('Invalid dimension:', params.dimension);
+                return false;
+            }
+            return true;
+        }
+
+        /**
+         * Create a single transformer layer with attention and feed-forward components
+         * @param {number} index - Layer index for identification
+         * @param {number} y - Y position for the layer
+         * @returns {Object} Layer components (attention, feedforward, connections)
+         */
+        function createLayer(index, y) {
+            try {
+                // Multi-Head Attention visualization
+                const attentionGeometry = new THREE.BoxGeometry(8, 1, 4);
+                const attentionMaterial = new THREE.MeshPhongMaterial({
+                    color: 0x00d4ff,      // Cyan color for attention
+                    transparent: true,
+                    opacity: 0.8,
+                    emissive: 0x001122    // Subtle glow effect
+                });
+                const attention = new THREE.Mesh(attentionGeometry, attentionMaterial);
+                attention.position.set(-6, 0, 0);  // Position on the left
+                
+                // Create individual attention heads as smaller cubes
+                const headGroup = createAttentionHeads();
+                if (headGroup) {
+                    attention.add(headGroup);
+                }
+                
+                // Feed Forward Network visualization
+                const ffGeometry = new THREE.BoxGeometry(8, 1, 4);
+                const ffMaterial = new THREE.MeshPhongMaterial({
+                    color: 0xff006e,      // Magenta color for feed-forward
+                    transparent: true,
+                    opacity: 0.8,
+                    emissive: 0x220011    // Subtle glow effect
+                });
+                const feedforward = new THREE.Mesh(ffGeometry, ffMaterial);
+                feedforward.position.set(6, 0, 0);   // Position on the right
+                
+                // Create connection visualizations
+                const connections = createLayerConnections();
+                
+                return {
+                    attention,
+                    feedforward,
+                    connections
+                };
+
+            } catch (error) {
+                console.error(`Error creating layer ${index}:`, error);
+                return null;
+            }
+        }
+
+        /**
+         * Create visual representation of attention heads
+         * @returns {THREE.Group} Group containing attention head visualizations
+         */
+        function createAttentionHeads() {
+            try {
+                const headGroup = new THREE.Group();
+                const headSize = 0.3;
+                const headsPerRow = Math.ceil(Math.sqrt(params.heads));
+                
+                for (let h = 0; h < params.heads; h++) {
+                    const headGeometry = new THREE.BoxGeometry(headSize, headSize, headSize);
+                    
+                    // Color each head differently using HSL for better distribution
+                    const hue = (h / params.heads) * 0.3 + 0.5;  // Cyan to blue range
+                    const headMaterial = new THREE.MeshPhongMaterial({
+                        color: new THREE.Color().setHSL(hue, 1, 0.6),
+                        emissive: new THREE.Color().setHSL(hue, 0.5, 0.1)
+                    });
+                    
+                    const head = new THREE.Mesh(headGeometry, headMaterial);
+                    
+                    // Arrange heads in a grid pattern
+                    const row = Math.floor(h / headsPerRow);
+                    const col = h % headsPerRow;
+                    head.position.set(
+                        (col - headsPerRow/2) * 0.5,
+                        0.8,  // Slightly above the main attention block
+                        (row - headsPerRow/2) * 0.5
+                    );
+                    
+                    headGroup.add(head);
+                }
+                
+                return headGroup;
+
+            } catch (error) {
+                console.error('Error creating attention heads:', error);
+                return null;
+            }
+        }
+
+        /**
+         * Create connection lines between layer components
+         * @returns {THREE.Group} Group containing connection visualizations
+         */
+        function createLayerConnections() {
+            try {
+                const connectionGroup = new THREE.Group();
+                const lineMaterial = new THREE.LineBasicMaterial({
+                    color: 0x8338ec,     // Purple color for connections
+                    transparent: true,
+                    opacity: 0.6
+                });
+                
+                // Connection from attention to feed-forward
+                const connectionGeometry = new THREE.BufferGeometry().setFromPoints([
+                    new THREE.Vector3(-2, 0, 0),  // From attention output
+                    new THREE.Vector3(2, 0, 0)    // To feed-forward input
+                ]);
+                const connection = new THREE.Line(connectionGeometry, lineMaterial);
+                connectionGroup.add(connection);
+                
+                // Residual connections (skip connections around each component)
+                const residualGeometry = new THREE.BufferGeometry().setFromPoints([
+                    new THREE.Vector3(-6, -0.8, 0),  // Start below attention
+                    new THREE.Vector3(-6, -2, 0),    // Go down
+                    new THREE.Vector3(6, -2, 0),     // Go across
+                    new THREE.Vector3(6, -0.8, 0)    // Come up to feed-forward
+                ]);
+                const residual = new THREE.Line(residualGeometry, lineMaterial);
+                connectionGroup.add(residual);
+                
+                return connectionGroup;
+
+            } catch (error) {
+                console.error('Error creating layer connections:', error);
+                return new THREE.Group(); // Return empty group to prevent errors
+            }
+        }
+
+        /**
+         * Create animated particle system to visualize data flow
+         * @param {number} y - Y position for the particle system
+         * @returns {THREE.Group} Group containing particle system
+         */
+        function createDataFlow(y) {
+            try {
+                const particleCount = 100;
+                const particles = new THREE.Group();
+                
+                for (let i = 0; i < particleCount; i++) {
+                    // Create small spherical particles
+                    const particleGeometry = new THREE.SphereGeometry(0.05, 4, 4);
+                    const particleMaterial = new THREE.MeshBasicMaterial({
+                        color: new THREE.Color().setHSL(Math.random() * 0.3 + 0.5, 1, 0.8),
+                        transparent: true,
+                        opacity: 0.8
+                    });
+                    const particle = new THREE.Mesh(particleGeometry, particleMaterial);
+                    
+                    // Random initial positions within the layer bounds
+                    particle.position.set(
+                        (Math.random() - 0.5) * 20,  // X: spread across layer width
+                        (Math.random() - 0.5) * 2,   // Y: small vertical variation
+                        (Math.random() - 0.5) * 8    // Z: depth variation
+                    );
+                    
+                    // Add velocity for animation (stored as custom property)
+                    particle.velocity = new THREE.Vector3(
+                        (Math.random() - 0.5) * 0.1,  // Slow horizontal movement
+                        0,                             // No vertical movement
+                        (Math.random() - 0.5) * 0.1   // Slow depth movement
+                    );
+                    
+                    particles.add(particle);
+                }
+                
+                return particles;
+
+            } catch (error) {
+                console.error('Error creating data flow particles:', error);
+                return null;
+            }
+        }
+
+        // ============================================================================
+        // ANIMATION AND RENDERING LOOP
+        // ============================================================================
+
+        /**
+         * Main animation loop - handles all visual updates and rendering
+         * Uses requestAnimationFrame for smooth 60fps animation
+         */
+        function animate() {
+            try {
+                // Continue animation loop
+                animationId = requestAnimationFrame(animate);
+                
+                // Update global time counter
+                time += 0.016 * params.speed;  // ~60fps * speed multiplier
+                
+                // Update all architecture components
+                updateArchitectureAnimation();
+                
+                // Update camera position for orbital view
+                updateCameraPosition();
+                
+                // Update UI elements
+                updateUI();
+                
+                // Render the scene
+                if (renderer && scene && camera) {
+                    renderer.render(scene, camera);
+                }
+
+            } catch (error) {
+                console.error('Animation error:', error);
+                // Stop animation loop on error to prevent infinite error spam
+                if (animationId) {
+                    cancelAnimationFrame(animationId);
+                }
+            }
+        }
+
+        /**
+         * Update animations for all architecture components
+         */
+        function updateArchitectureAnimation() {
+            architecture.forEach((layer, index) => {
+                try {
+                    const phase = (time + index * 0.5) % (Math.PI * 2);
+                    
+                    // Animate attention mechanism with subtle rotation and opacity
+                    if (layer.attention) {
+                        layer.attention.rotation.y = Math.sin(phase) * 0.1;
+                        layer.attention.material.opacity = 0.6 + Math.sin(phase * 2) * 0.2;
+                    }
+                    
+                    // Animate feed forward network
+                    if (layer.feedforward) {
+                        layer.feedforward.rotation.y = -Math.sin(phase) * 0.1;
+                        layer.feedforward.material.opacity = 0.6 + Math.cos(phase * 2) * 0.2;
+                    }
+                    
+                    // Animate data flow particles
+                    if (layer.particles) {
+                        updateParticles(layer.particles);
+                    }
+                    
+                    // Highlight currently active layer
+                    updateLayerHighlight(layer, index);
+
+                } catch (error) {
+                    console.error(`Error animating layer ${index}:`, error);
+                }
+            });
+        }
+
+        /**
+         * Update particle positions and properties
+         * @param {THREE.Group} particles - Particle group to update
+         */
+        function updateParticles(particles) {
+            particles.children.forEach(particle => {
+                try {
+                    // Move particles based on their velocity
+                    if (particle.velocity) {
+                        particle.position.add(particle.velocity);
+                    }
+                    
+                    // Wrap particles around the edges (creates continuous flow effect)
+                    if (particle.position.x > 10) particle.position.x = -10;
+                    if (particle.position.x < -10) particle.position.x = 10;
+                    if (particle.position.z > 4) particle.position.z = -4;
+                    if (particle.position.z < -4) particle.position.z = 4;
+                    
+                    // Animate opacity for pulsing effect
+                    if (particle.material) {
+                        particle.material.opacity = 0.4 + Math.sin(time * 3 + particle.position.x) * 0.4;
+                    }
+
+                } catch (error) {
+                    console.error('Error updating particle:', error);
+                }
+            });
+        }
+
+        /**
+         * Update layer highlighting based on animation time
+         * @param {Object} layer - Layer object to potentially highlight
+         * @param {number} index - Layer index
+         */
+        function updateLayerHighlight(layer, index) {
+            try {
+                // Determine if this layer should be highlighted
+                const isActive = Math.floor(time / 2) % params.layers === index;
+                
+                if (isActive) {
+                    currentLayer = index;
+                    // Brighter emissive colors for active layer
+                    if (layer.attention && layer.attention.material) {
+                        layer.attention.material.emissive.setHex(0x003344);
+                    }
+                    if (layer.feedforward && layer.feedforward.material) {
+                        layer.feedforward.material.emissive.setHex(0x440033);
+                    }
+                } else {
+                    // Dimmer emissive colors for inactive layers
+                    if (layer.attention && layer.attention.material) {
+                        layer.attention.material.emissive.setHex(0x001122);
+                    }
+                    if (layer.feedforward && layer.feedforward.material) {
+                        layer.feedforward.material.emissive.setHex(0x220011);
+                    }
+                }
+
+            } catch (error) {
+                console.error('Error updating layer highlight:', error);
+            }
+        }
+
+        /**
+         * Update camera position for orbital movement
+         */
+        function updateCameraPosition() {
+            try {
+                const radius = 40;
+                camera.position.x = Math.cos(time * 0.1) * radius;
+                camera.position.z = Math.sin(time * 0.1) * radius;
+                camera.lookAt(0, 0, 0);
+
+            } catch (error) {
+                console.error('Error updating camera position:', error);
+            }
+        } = (time + index * 0.5) % (Math.PI * 2);
+                
+                // Animate attention mechanism
+                layer.attention.rotation.y = Math.sin(phase) * 0.1;
+                layer.attention.material.opacity = 0.6 + Math.sin(phase * 2) * 0.2;
+                
+                // Animate feed forward
+                layer.feedforward.rotation.y = -Math.sin(phase) * 0.1;
+                layer.feedforward.material.opacity = 0.6 + Math.cos(phase * 2) * 0.2;
+                
+                // Animate particles
+                layer.particles.children.forEach(particle => {
+                    particle.position.add(particle.velocity);
+                    
+                    // Wrap particles
+                    if (particle.position.x > 10) particle.position.x = -10;
+                    if (particle.position.x < -10) particle.position.x = 10;
+                    if (particle.position.z > 4) particle.position.z = -4;
+                    if (particle.position.z < -4) particle.position.z = 4;
+                    
+                    // Pulse effect
+                    particle.material.opacity = 0.4 + Math.sin(time * 3 + particle.position.x) * 0.4;
+                });
+                
+                // Highlight current layer
+                const isActive = Math.floor(time / 2) % params.layers === index;
+                if (isActive) {
+                    currentLayer = index;
+                    layer.attention.material.emissive.setHex(0x003344);
+                    layer.feedforward.material.emissive.setHex(0x440033);
+                } else {
+                    layer.attention.material.emissive.setHex(0x001122);
+                    layer.feedforward.material.emissive.setHex(0x220011);
+                }
+            });
+            
+            // Update camera orbit
+            const radius = 40;
+            camera.position.x = Math.cos(time * 0.1) * radius;
+            camera.position.z = Math.sin(time * 0.1) * radius;
+            camera.lookAt(0, 0, 0);
+            
+            updateUI();
+            renderer.render(scene, camera);
+        }
+
+        // ============================================================================
+        // UI UPDATES AND METRIC CALCULATIONS
+        // ============================================================================
+
+        /**
+         * Update UI elements with current animation state
+         */
+        function updateUI() {
+            try {
+                // Update active layer display
+                const activeLayerElement = document.getElementById('activeLayer');
+                if (activeLayerElement) {
+                    activeLayerElement.textContent = currentLayer + 1;
+                }
+                
+                // Update attention heads visualization
+                updateAttentionHeadsUI();
+
+            } catch (error) {
+                console.error('Error updating UI:', error);
+            }
+        }
+
+        /**
+         * Update the visual representation of attention heads in the UI
+         */
+        function updateAttentionHeadsUI() {
+            try {
+                const headVisual = document.getElementById('headVisual');
+                if (!headVisual) return;
+                
+                headVisual.innerHTML = '';
+                
+                // Create visual dots for each attention head
+                for (let i = 0; i < params.heads; i++) {
+                    const head = document.createElement('div');
+                    head.className = 'attention-head';
+                    head.style.animationDelay = `${i * 0.1}s`;  // Staggered animation
+                    headVisual.appendChild(head);
+                }
+
+            } catch (error) {
+                console.error('Error updating attention heads UI:', error);
+            }
+        }
+
+        /**
+         * Calculate and update performance metrics for the current architecture
+         * Uses simplified but representative formulas for transformer models
+         */
+        function updateMetrics() {
+            try {
+                const embedDim = params.dimension;
+                const vocabSize = 50000;  // Typical vocabulary size
+                
+                // Calculate parameter counts (simplified transformer math)
+                // Attention: 4 weight matrices per layer (Q, K, V, O)
+                const attentionParams = params.layers * (4 * embedDim * embedDim + 2 * embedDim);
+                
+                // Feed-forward: typically 4x expansion, so 2 matrices
+                const ffParams = params.layers * (8 * embedDim * embedDim + 9 * embedDim);
+                
+                // Embedding parameters (input + positional)
+                const embeddingParams = embedDim * vocabSize + embedDim * 2048; // 2048 max positions
+                
+                const totalParams = attentionParams + ffParams + embeddingParams;
+                
+                // Update parameter count display
+                const paramElement = document.getElementById('paramCount');
+                if (paramElement) {
+                    paramElement.textContent = formatNumber(totalParams);
+                }
+                
+                // Calculate memory usage (FP16 = 2 bytes per parameter)
+                const memoryBytes = totalParams * 2;
+                const memoryElement = document.getElementById('memoryUsage');
+                if (memoryElement) {
+                    memoryElement.textContent = formatBytes(memoryBytes);
+                }
+                
+                // Estimate FLOPS per token (very simplified)
+                const flopsPerToken = totalParams * 2; // Forward pass approximation
+                const flopsElement = document.getElementById('flopsCount');
+                if (flopsElement) {
+                    flopsElement.textContent = formatNumber(flopsPerToken);
+                }
+                
+                // Estimate throughput (inversely related to model size)
+                const throughput = Math.max(100, Math.floor(10000000 / (totalParams / 1000000)));
+                const throughputElement = document.getElementById('throughput');
+                if (throughputElement) {
+                    throughputElement.textContent = formatNumber(throughput) + ' tok/s';
+                }
+
+            } catch (error) {
+                console.error('Error updating metrics:', error);
+                showError('Failed to calculate performance metrics');
+            }
+        }
+
+        /**
+         * Format large numbers with appropriate suffixes (K, M, B, T)
+         * @param {number} num - Number to format
+         * @returns {string} Formatted number string
+         */
+        function formatNumber(num) {
+            if (num >= 1e12) return (num / 1e12).toFixed(1) + 'T';
+            if (num >= 1e9) return (num / 1e9).toFixed(1) + 'B';
+            if (num >= 1e6) return (num / 1e6).toFixed(1) + 'M';
+            if (num >= 1e3) return (num / 1e3).toFixed(1) + 'K';
+            return num.toString();
+        }
+
+        /**
+         * Format byte values with appropriate units (KB, MB, GB, TB)
+         * @param {number} bytes - Number of bytes to format
+         * @returns {string} Formatted byte string
+         */
+        function formatBytes(bytes) {
+            if (bytes >= 1e12) return (bytes / 1e12).toFixed(1) + ' TB';
+            if (bytes >= 1e9) return (bytes / 1e9).toFixed(1) + ' GB';
+            if (bytes >= 1e6) return (bytes / 1e6).toFixed(1) + ' MB';
+            if (bytes >= 1e3) return (bytes / 1e3).toFixed(1) + ' KB';
+            return bytes + ' B';
+        }
+
+        // ============================================================================
+        // EVENT HANDLERS AND USER CONTROLS
+        // ============================================================================
+
+        /**
+         * Setup all UI control event listeners
+         * Includes parameter sliders, dropdowns, and model type selection
+         */
+        function setupControls() {
+            try {
+                // Layer count control
+                const layersSlider = document.getElementById('layers');
+                if (layersSlider) {
+                    layersSlider.addEventListener('input', (e) => {
+                        try {
+                            const newLayers = parseInt(e.target.value);
+                            if (newLayers !== params.layers) {
+                                params.layers = newLayers;
+                                document.getElementById('layerCount').textContent = params.layers;
+                                createArchitecture();
+                            }
+                        } catch (error) {
+                            console.error('Error updating layers:', error);
+                        }
+                    });
+                }
+                
+                // Attention heads control
+                const headsSlider = document.getElementById('heads');
+                if (headsSlider) {
+                    headsSlider.addEventListener('input', (e) => {
+                        try {
+                            const newHeads = parseInt(e.target.value);
+                            if (newHeads !== params.heads) {
+                                params.heads = newHeads;
+                                document.getElementById('headCount').textContent = params.heads;
+                                createArchitecture();
+                            }
+                        } catch (error) {
+                            console.error('Error updating heads:', error);
+                        }
+                    });
+                }
+                
+                // Hidden dimension control
+                const dimensionSlider = document.getElementById('dimension');
+                if (dimensionSlider) {
+                    dimensionSlider.addEventListener('input', (e) => {
+                        try {
+                            const newDimension = parseInt(e.target.value);
+                            if (newDimension !== params.dimension) {
+                                params.dimension = newDimension;
+                                document.getElementById('hiddenDim').textContent = params.dimension;
+                                updateMetrics(); // Only need to update metrics, not rebuild
+                            }
+                        } catch (error) {
+                            console.error('Error updating dimension:', error);
+                        }
+                    });
+                }
+                
+                // Animation speed control
+                const speedSlider = document.getElementById('speed');
+                if (speedSlider) {
+                    speedSlider.addEventListener('input', (e) => {
+                        try {
+                            params.speed = parseFloat(e.target.value);
+                            document.getElementById('speedValue').textContent = params.speed + 'x';
+                        } catch (error) {
+                            console.error('Error updating speed:', error);
+                        }
+                    });
+                }
+                
+                // Model type selector
+                const modelSelect = document.getElementById('modelType');
+                if (modelSelect) {
+                    modelSelect.addEventListener('change', (e) => {
+                        try {
+                            params.modelType = e.target.value;
+                            updateModelPresets();
+                        } catch (error) {
+                            console.error('Error changing model type:', error);
+                        }
+                    });
+                }
+
+            } catch (error) {
+                console.error('Error setting up controls:', error);
+                showError('Failed to initialize controls');
+            }
+        }
+
+        /**
+         * Update architecture parameters based on selected model type
+         * Includes presets for popular model architectures
+         */
+        function updateModelPresets() {
+            try {
+                let preset = {};
+                
+                // Define presets for different model types
+                switch(params.modelType) {
+                    case 'gpt':
+                        preset = { layers: 12, heads: 12, dimension: 768 };  // GPT-base
+                        break;
+                    case 'bert':
+                        preset = { layers: 12, heads: 12, dimension: 768 };  // BERT-base
+                        break;
+                    case 't5':
+                        preset = { layers: 12, heads: 12, dimension: 768 };  // T5-base
+                        break;
+                    case 'custom':
+                        // Keep current values for custom
+                        return;
+                    default:
+                        console.warn('Unknown model type:', params.modelType);
+                        return;
+                }
+                
+                // Apply preset values
+                params.layers = preset.layers;
+                params.heads = preset.heads;
+                params.dimension = preset.dimension;
+                
+                // Update UI controls and rebuild architecture
+                updateControlValues();
+                createArchitecture();
+
+            } catch (error) {
+                console.error('Error updating model presets:', error);
+            }
+        }
+
+        /**
+         * Update control values in the UI to match current parameters
+         */
+        function updateControlValues() {
+            try {
+                const elements = {
+                    'layers': params.layers,
+                    'heads': params.heads,
+                    'dimension': params.dimension,
+                    'layerCount': params.layers,
+                    'headCount': params.heads,
+                    'hiddenDim': params.dimension
+                };
+                
+                Object.entries(elements).forEach(([id, value]) => {
+                    const element = document.getElementById(id);
+                    if (element) {
+                        if (element.tagName === 'INPUT') {
+                            element.value = value;
+                        } else {
+                            element.textContent = value;
+                        }
+                    }
+                });
+
+            } catch (error) {
+                console.error('Error updating control values:', error);
+            }
+        }
+
+        // ============================================================================
+        // ERROR HANDLING AND UTILITY FUNCTIONS
+        // ============================================================================
+
+        /**
+         * Check if WebGL is supported in the current browser
+         * @returns {boolean} True if WebGL is supported
+         */
+        function isWebGLSupported() {
+            try {
+                const canvas = document.createElement('canvas');
+                const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+                return gl !== null;
+            } catch (error) {
+                return false;
+            }
+        }
+
+        /**
+         * Handle WebGL context loss (can happen due to GPU issues or browser limits)
+         * @param {Event} event - WebGL context lost event
+         */
+        function handleContextLoss(event) {
+            console.warn('WebGL context lost');
+            event.preventDefault();
+            
+            // Stop animation loop
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+                animationId = null;
+            }
+            
+            showError('Graphics context lost. The visualization will restart automatically when possible.');
+        }
+
+        /**
+         * Handle WebGL context restoration
+         * @param {Event} event - WebGL context restored event
+         */
+        function handleContextRestore(event) {
+            console.log('WebGL context restored');
+            
+            try {
+                // Recreate the entire scene
+                createArchitecture();
+                
+                // Restart animation
+                animate();
+                
+                // Hide any error messages
+                hideError();
+                
+            } catch (error) {
+                console.error('Failed to restore WebGL context:', error);
+                showError('Failed to restore graphics. Please refresh the page.');
+            }
+        }
+
+        /**
+         * Display error message to user
+         * @param {string} message - Error message to display
+         */
+        function showError(message) {
+            try {
+                // Remove any existing error messages
+                const existingError = document.getElementById('error-message');
+                if (existingError) {
+                    existingError.remove();
+                }
+                
+                // Create error message element
+                const errorDiv = document.createElement('div');
+                errorDiv.id = 'error-message';
+                errorDiv.style.cssText = `
+                    position: fixed;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    background: rgba(255, 0, 0, 0.9);
+                    color: white;
+                    padding: 20px;
+                    border-radius: 10px;
+                    font-size: 16px;
+                    text-align: center;
+                    z-index: 10000;
+                    max-width: 400px;
+                    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+                `;
+                errorDiv.textContent = message;
+                
+                document.body.appendChild(errorDiv);
+                
+            } catch (error) {
+                console.error('Failed to show error message:', error);
+                // Fallback to alert if DOM manipulation fails
+                alert(message);
+            }
+        }
+
+        /**
+         * Hide error message
+         */
+        function hideError() {
+            try {
+                const errorElement = document.getElementById('error-message');
+                if (errorElement) {
+                    errorElement.remove();
+                }
+            } catch (error) {
+                console.error('Failed to hide error message:', error);
+            }
+        }
+
+        /**
+         * Handle window resize events
+         * Updates camera and renderer to maintain proper aspect ratio
+         */
+        function onWindowResize() {
+            try {
+                if (!camera || !renderer) {
+                    console.warn('Camera or renderer not initialized for resize');
+                    return;
+                }
+                
+                // Update camera aspect ratio
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                
+                // Update renderer size
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                
+            } catch (error) {
+                console.error('Error handling window resize:', error);
+            }
+        }
+
+        /**
+         * Cleanup function to prevent memory leaks
+         * Should be called when the visualization is no longer needed
+         */
+        function cleanup() {
+            try {
+                // Stop animation loop
+                if (animationId) {
+                    cancelAnimationFrame(animationId);
+                    animationId = null;
+                }
+                
+                // Clean up architecture
+                cleanupArchitecture();
+                
+                // Dispose of renderer
+                if (renderer) {
+                    renderer.dispose();
+                    
+                    // Remove canvas from DOM
+                    const canvas = renderer.domElement;
+                    if (canvas && canvas.parentNode) {
+                        canvas.parentNode.removeChild(canvas);
+                    }
+                }
+                
+                // Clear references
+                scene = null;
+                camera = null;
+                renderer = null;
+                
+                console.log('Cleanup completed');
+
+            } catch (error) {
+                console.error('Error during cleanup:', error);
+            }
+        }
+
+        // ============================================================================
+        // INITIALIZATION AND EVENT BINDING
+        // ============================================================================
+
+        /**
+         * Initialize the entire application
+         * Called when the DOM is loaded
+         */
+        function initializeApplication() {
+            try {
+                console.log('Initializing LLM Architecture Visualizer...');
+                
+                // Initialize 3D scene
+                initScene();
+                
+                // Setup UI controls
+                setupControls();
+                
+                // Bind window events
+                window.addEventListener('resize', onWindowResize, { passive: true });
+                
+                // Handle page visibility changes (pause animation when tab is hidden)
+                document.addEventListener('visibilitychange', handleVisibilityChange);
+                
+                console.log('Application initialized successfully');
+
+            } catch (error) {
+                console.error('Failed to initialize application:', error);
+                showError('Failed to initialize the application. Please refresh the page and try again.');
+            }
+        }
+
+        /**
+         * Handle page visibility changes to optimize performance
+         */
+        function handleVisibilityChange() {
+            try {
+                if (document.hidden) {
+                    // Page is hidden, pause expensive operations
+                    if (animationId) {
+                        cancelAnimationFrame(animationId);
+                        animationId = null;
+                    }
+                } else {
+                    // Page is visible, resume animation
+                    if (!animationId && isInitialized) {
+                        animate();
+                    }
+                }
+            } catch (error) {
+                console.error('Error handling visibility change:', error);
+            }
+        }
+
+        // ============================================================================
+        // APPLICATION ENTRY POINT
+        // ============================================================================
+
+        // Initialize everything when the page loads
+        window.addEventListener('load', initializeApplication);
+
+        // Cleanup when the page is about to unload
+        window.addEventListener('beforeunload', () => {
+            try {
+                cleanup();
+            } catch (error) {
+                console.error('Error during page unload cleanup:', error);
+            }
+        });
+
+        // Also handle page hide event for better cleanup on mobile
+        window.addEventListener('pagehide', () => {
+            try {
+                cleanup();
+            } catch (error) {
+                console.error('Error during page hide cleanup:', error);
+            }
+        });
+
+        // Global error handler for unhandled errors
+        window.addEventListener('error', (event) => {
+            console.error('Unhandled error:', event.error);
+            
+            // Only show user-facing error for critical failures
+            if (event.error && event.error.message && 
+                (event.error.message.includes('WebGL') || 
+                 event.error.message.includes('Three') ||
+                 event.error.message.includes('canvas'))) {
+                showError('A graphics error occurred. Please refresh the page.');
+            }
+        });
+
+        // Handle unhandled promise rejections
+        window.addEventListener('unhandledrejection', (event) => {
+            console.error('Unhandled promise rejection:', event.reason);
+            event.preventDefault(); // Prevent default browser behavior
+        });
+    </script>
+</body>
+</html>

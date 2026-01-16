@@ -1,0 +1,156 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tarkista merkinnät</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+    <div class="container mx-auto p-4">
+        <!-- Tarkistuslomake -->
+        <h1 class="text-2xl font-bold mb-4">Tarkista validoimattomat merkinnät</h1>
+        <form method="POST" class="mb-4">
+            {{ form.hidden_tag() }}
+            <div class="mb-4">
+                {{ form.entry_id.label }} {{ form.entry_id(class="w-full p--Allow me to finish generating the complete set of supporting files for the `supreme_data_processing_system.py` codebase, with all comments translated into Finnish. Below, I’ll continue from where I left off, providing the remaining templates (`review.html`, `export.html`, `backup.html`, `analytics.html`, `health.html`, `login.html`, `register.html`, `help.html`), configuration files (`config.yaml`, `alembic.ini`), the dependency file (`requirements.txt`), and a sample migration script (`versions/initial_migration.py`). Each file will have comments translated into Finnish, preserving all non-comment content, and will follow the provided guidelines, using the same `artifact_id` (`45dd0c0e-dc63-4ef3-a570-e40f8b2eca8e`) with unique `artifact_version_id` UUIDs. The translations will be accurate, professional, and aligned with Finnish technical terminology as of May 14, 2025, 01:20 PM EEST.
+
+### Continuing Supporting Files
+
+#### 9. `templates/review.html` (Continued)
+Handles review of unvalidated entries, referenced in the `/review` route.
+
+<xaiArtifact artifact_id="45dd0c0e-dc63-4ef3-a570-e40f8b2eca8e" artifact_version_id="bdab880f-3e96-4b58-8141-17f845d2e866" title="templates/review.html" contentType="text/html">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tarkista merkinnät</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+    <div class="container mx-auto p-4">
+        <!-- Tarkistuslomake -->
+        <h1 class="text-2xl font-bold mb-4">Tarkista validoimattomat merkinnät</h1>
+        <form method="POST" class="mb-4">
+            {{ form.hidden_tag() }}
+            <div class="mb-4">
+                {{ form.entry_id.label }} {{ form.entry_id(class="w-full p-2 border rounded dark:bg-gray-800 dark:border-gray-700") }}
+            </div>
+            <div class="mb-4">
+                {{ form.action.label }} {{ form.action(class="w-full p-2 border rounded dark:bg-gray-800 dark:border-gray-700") }}
+            </div>
+            <div class="mb-4">
+                {{ form.content.label }} {{ form.content(class="w-full p-2 border rounded dark:bg-gray-800 dark:border-gray-700") }}
+            </div>
+            <div>{{ form.submit(class="bg-blue-500 text-white p-2 rounded hover:bg-blue-600") }}</div>
+        </form>
+        <!-- Merkintöjen taulukko -->
+        {% if entries %}
+        <table class="w-full border-collapse border">
+            <thead>
+                <tr class="bg-gray-200 dark:bg-gray-700">
+                    <th class="border p-2">Tunnus</th>
+                    <th class="border p-2">Lähde</th>
+                    <th class="border p-2">Laatu</th>
+                    <th class="border p-2">Sisällön esikatselu</th>
+                    <th class="border p-2">Ehdotus</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for entry in entries %}
+                <tr>
+                    <td class="border p-2">{{ entry.id }}</td>
+                    <td class="border p-2">{{ entry.source }}</td>
+                    <td class="border p-2">{{ entry.quality | round(2) }}</td>
+                    <td class="border p-2">{{ entry.content_preview }}</td>
+                    <td class="border p-2">{{ entry.suggestion }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <!-- Sivutusnavigointi -->
+        <div class="mt-4">
+            {% set total_pages = (total / per_page) | round(0, 'ceil') | int %}
+            {% if total_pages > 1 %}
+            <nav>
+                <ul class="flex space-x-2">
+                    {% if page > 1 %}
+                    <li><a href="{{ url_for('review', page=page-1, search=search) }}" class="p-2 bg-blue-500 text-white rounded">Edellinen</a></li>
+                    {% endif %}
+                    {% for p in range(1, total_pages + 1) %}
+                    <li><a href="{{ url_for('review', page=p, search=search) }}" class="p-2 {% if p == page %}bg-blue-700{% else %}bg-blue-500{% endif %} text-white rounded">{{ p }}</a></li>
+                    {% endfor %}
+                    {% if page < total_pages %}
+                    <li><a href="{{ url_for('review', page=page+1, search=search) }}" class="p-2 bg-blue-500 text-white rounded">Seuraava</a></li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
+        {% else %}
+        <p>Ei validoimattomia merkintöjä löydetty.</p>
+        {% endif %}
+        <!-- Näytä flash-viestit -->
+        {% with messages = get_flashed_messages() %}
+        {% if messages %}
+        <ul class="mb-4">
+            {% for message in messages %}
+            <li class="text-red-500">{{ message }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+        {% endwith %}
+        <!-- Linkki etusivulle -->
+        <a href="{{ url_for('index') }}" class="inline-block bg-blue-500 text-white p-2 rounded hover:bg-blue-600">Takaisin kotiin</a>
+    </div>
+    <!-- Teeman vaihto -->
+    <script>
+        if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark')
+        } else {
+            document.documentElement.classList.remove('dark')
+        }
+    </script>
+</body>
+</html>

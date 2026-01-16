@@ -1,0 +1,170 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Finnish Culture LLM</title>
+    <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios@1.4.0/dist/axios.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const App = () => {
+            const [file, setFile] = useState(null);
+            const [seed, setSeed] = useState('Väinämöinen, vanha viisas');
+            const [generated, setGenerated] = useState('');
+            const [trainingLog, setTrainingLog] = useState([]);
+            const [message, setMessage] = useState('');
+
+            const handleFileChange = (e) => {
+                setFile(e.target.files[0]);
+            };
+
+            const handleUpload = async () => {
+                if (!file) {
+                    setMessage('Please select a file');
+                    return;
+                }
+                const formData = new FormData();
+                formData.append('file', file);
+                try {
+                    const response = await axios.post('http://localhost:5000/upload', formData);
+                    setMessage(response.data.message);
+                } catch (error) {
+                    setMessage(error.response?.data.error || 'Upload failed');
+                }
+            };
+
+            const handleTrain = async () => {
+                setTrainingLog([]);
+                try {
+                    const response = await axios.post('http://localhost:5000/train');
+                    setTrainingLog(response.data.log);
+                    setMessage('Training completed');
+                } catch (error) {
+                    setMessage(error.response?.data.error || 'Training failed');
+                }
+            };
+
+            const handleGenerate = async () => {
+                try {
+                    const response = await axios.post('http://localhost:5000/generate', { seed });
+                    setGenerated(response.data.generated);
+                    setMessage('Text generated');
+                } catch (error) {
+                    setMessage(error.response?.data.error || 'Generation failed');
+                }
+            };
+
+            return (
+                <div className="min-h-screen bg-gray-100 flex flex-col items-center p-4">
+                    <h1 className="text-3xl font-bold mb-4">Finnish Culture LLM</h1>
+                    <div className="bg-white p-6 rounded shadow-md w-full max-w-md">
+                        <h2 className="text-xl mb-2">Upload Finnish Texts or Media</h2>
+                        <p className="text-sm text-gray-600 mb-2">
+                            Upload .txt, .pdf, or .jpg/.jpeg/.png files containing Finnish literature, history, or cultural texts. PDFs and images are processed for text extraction.
+                        </p>
+                        <input
+                            type="file"
+                            accept=".txt,.pdf,.jpg,.jpeg,.png"
+                            onChange={handleFileChange}
+                            className="mb-2"
+                        />
+                        <button
+                            onClick={handleUpload}
+                            className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 mb-4"
+                        >
+                            Upload
+                        </button>
+                        <h2 className="text-xl mb-2">Train Model</h2>
+                        <button
+                            onClick={handleTrain}
+                            className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 mb-4"
+                        >
+                            Start Training
+                        </button>
+                        <h2 className="text-xl mb-2">Generate Text</h2>
+                        <input
+                            type="text"
+                            value={seed}
+                            onChange={(e) => setSeed(e.target.value)}
+                            className="border p-2 w-full mb-2"
+                            placeholder="Enter seed text (e.g., Väinämöinen, vanha viisas)"
+                        />
+                        <button
+                            onClick={handleGenerate}
+                            className="bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600 mb-4"
+                        >
+                            Generate
+                        </button>
+                        {message && <p className="text-red-500">{message}</p>}
+                        {trainingLog.length > 0 && (
+                            <div className="mt-4">
+                                <h3 className="text-lg">Training Log</h3>
+                                <ul className="list-disc pl-5">
+                                    {trainingLog.map((log, index) => (
+                                        <li key={index}>{log}</li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+                        {generated && (
+                            <div className="mt-4">
+                                <h3 className="text-lg">Generated Text</h3>
+                                <p className="whitespace-pre-wrap">{generated}</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
