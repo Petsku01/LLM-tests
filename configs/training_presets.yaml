@@ -1,0 +1,167 @@
+# Training Configuration Presets for Llama-4 Fine-Tuning
+
+# Default configuration for 24GB VRAM (RTX 4090, RTX 3090)
+default_24gb:
+  model_name: "unsloth/Llama-4-8B-Instruct-bnb-4bit"
+  max_seq_length: 8192
+  load_in_4bit: true
+  
+  lora:
+    r: 64
+    alpha: 32
+    dropout: 0.05
+    use_rslora: true
+    target_modules:
+      - "q_proj"
+      - "k_proj"
+      - "v_proj"
+      - "o_proj"
+      - "gate_proj"
+      - "up_proj"
+      - "down_proj"
+  
+  training:
+    per_device_train_batch_size: 2
+    gradient_accumulation_steps: 4
+    num_train_epochs: 1
+    learning_rate: 2.0e-4
+    weight_decay: 0.01
+    warmup_ratio: 0.03
+    lr_scheduler_type: "cosine"
+    optim: "adamw_8bit"
+    packing: true
+    seed: 42
+    
+  logging:
+    logging_steps: 10
+    save_steps: 100
+    save_total_limit: 3
+
+
+# High-capacity configuration (40GB+ VRAM)
+high_capacity_40gb:
+  model_name: "unsloth/Llama-4-8B-Instruct-bnb-4bit"
+  max_seq_length: 16384
+  load_in_4bit: true
+  
+  lora:
+    r: 128
+    alpha: 64
+    dropout: 0.05
+    use_rslora: true
+  
+  training:
+    per_device_train_batch_size: 4
+    gradient_accumulation_steps: 4
+    num_train_epochs: 3
+    learning_rate: 1.5e-4
+    weight_decay: 0.01
+    warmup_ratio: 0.05
+    lr_scheduler_type: "cosine"
+    optim: "adamw_8bit"
+    packing: true
+    seed: 42
+
+
+# Memory-efficient configuration (16GB VRAM)
+memory_efficient_16gb:
+  model_name: "unsloth/Llama-4-8B-Instruct-bnb-4bit"
+  max_seq_length: 4096
+  load_in_4bit: true
+  
+  lora:
+    r: 32
+    alpha: 16
+    dropout: 0.05
+    use_rslora: true
+  
+  training:
+    per_device_train_batch_size: 1
+    gradient_accumulation_steps: 8
+    num_train_epochs: 1
+    learning_rate: 2.0e-4
+    weight_decay: 0.01
+    warmup_ratio: 0.03
+    lr_scheduler_type: "cosine"
+    optim: "adamw_8bit"
+    packing: true
+    seed: 42
+
+
+# Fast iteration configuration (for quick experiments)
+fast_iteration:
+  model_name: "unsloth/Llama-4-8B-Instruct-bnb-4bit"
+  max_seq_length: 2048
+  load_in_4bit: true
+  
+  lora:
+    r: 16
+    alpha: 32
+    dropout: 0.0
+    use_rslora: false
+  
+  training:
+    per_device_train_batch_size: 4
+    gradient_accumulation_steps: 2
+    num_train_epochs: 1
+    learning_rate: 5.0e-4
+    weight_decay: 0.0
+    warmup_ratio: 0.1
+    lr_scheduler_type: "linear"
+    optim: "adamw_8bit"
+    packing: true
+    seed: 42
+    
+  logging:
+    logging_steps: 5
+    save_steps: 50
+
+
+# Instruction-following optimized configuration
+instruction_following:
+  model_name: "unsloth/Llama-4-8B-Instruct-bnb-4bit"
+  max_seq_length: 4096
+  load_in_4bit: true
+  
+  lora:
+    r: 64
+    alpha: 32
+    dropout: 0.1
+    use_rslora: true
+  
+  training:
+    per_device_train_batch_size: 2
+    gradient_accumulation_steps: 8
+    num_train_epochs: 3
+    learning_rate: 1.0e-4
+    weight_decay: 0.01
+    warmup_ratio: 0.05
+    lr_scheduler_type: "cosine"
+    optim: "adamw_8bit"
+    packing: true
+    seed: 42
+
+
+# Chat/Conversation optimized configuration
+chat_optimized:
+  model_name: "unsloth/Llama-4-8B-Instruct-bnb-4bit"
+  max_seq_length: 8192
+  load_in_4bit: true
+  
+  lora:
+    r: 64
+    alpha: 32
+    dropout: 0.05
+    use_rslora: true
+  
+  training:
+    per_device_train_batch_size: 2
+    gradient_accumulation_steps: 4
+    num_train_epochs: 2
+    learning_rate: 2.0e-4
+    weight_decay: 0.01
+    warmup_ratio: 0.03
+    lr_scheduler_type: "cosine"
+    optim: "adamw_8bit"
+    packing: true
+    seed: 42

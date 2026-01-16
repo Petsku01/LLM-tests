@@ -1,0 +1,40 @@
+# Ignore Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Ignore virtual environments
+.venv/
+venv/
+
+# Ignore outputs
+outputs/
+*.pth
+*.bin
+
+# Ignore data files
+data/*.json
+!data/sample_*.json
+
+# Ignore logs
+*.log
+mlruns/
+wandb/
+
+# Ignore IDE
+.vscode/
+.idea/
+
+# Ignore git
+.git/
+.gitignore
+
+# Ignore docs build
+docs/_build/
+
+# Ignore test coverage
+.coverage
+htmlcov/
+
+# Large model files
+*.safetensors
