@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Finnish Culture LLM v2.0</title>
+    <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios@1.4.0/dist/axios.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+        const API_BASE = "http://127.0.0.1:5000";
+
+        const App = () => {
+            const [sessionId, setSessionId] = useState(null);
+            const [file, setFile] = useState(null);
+            const [status, setStatus] = useState(null);
+            const [trainingProgress, setTrainingProgress] = useState(0);
+            const [seed, setSeed] = useState("Väinämöinen, vanha viisas");
+            const [generated, setGenerated] = useState("");
+            const [message, setMessage] = useState("");
+            const [loading, setLoading] = useState(false);
+            const progressIntervalRef = useRef(null);
+
+            useEffect(() => {
+                createSession();
+            }, []);
+
+            const createSession = async () => {
+                try {
+                    const response = await axios.post(`${API_BASE}/session/create`);
+                    setSessionId(response.data.session_id);
+                    setMessage("Session created successfully");
+                } catch (error) {
+                    setMessage("Failed to create session");
+                }
+            };
+
+            const checkStatus = async (id = sessionId) => {
+                if (!id) return;
+                try {
+                    const response = await axios.get(`${API_BASE}/status/${id}`);
+                    setStatus(response.data);
+                    setTrainingProgress(response.data.progress);
+                } catch (error) {
+                    console.error("Status check failed:", error);
+                }
+            };
+
+            useEffect(() => {
+                if (status?.status === "training") {
+                    const interval = setInterval(() => checkStatus(), 1000);
+                    return () => clearInterval(interval);
+                }
+            }, [status?.status, sessionId]);
+
+            const handleFileChange = (e) => {
+                setFile(e.target.files[0]);
+            };
+
+            const handleUpload = async () => {
+                if (!file || !sessionId) {
+                    setMessage("Please select a file");
+                    return;
+                }
+
+                setLoading(true);
+                const formData = new FormData();
+                formData.append("file", file);
+
+                try {
+                    const response = await axios.post(
+                        `${API_BASE}/upload?session_id=${sessionId}`,
+                        formData,
+                        { headers: { "Content-Type": "multipart/form-data" } }
+                    );
+                    setMessage(
+                        `Success: ${response.data.message}. Total: ${response.data.total_chars} chars`
+                    );
+                    setFile(null);
+                    checkStatus();
+                } catch (error) {
+                    setMessage(
+                        error.response?.data?.detail ||
+                        error.response?.data?.error ||
+                        "Upload failed"
+                    );
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const handleTrain = async () => {
+                if (!sessionId) return;
+
+                setLoading(true);
+                setMessage("Training started... This may take several minutes.");
+
+                try {
+                    await axios.post(`${API_BASE}/train`, { session_id: sessionId });
+                    
+                    // Poll status every 2 seconds
+                    const pollInterval = setInterval(async () => {
+                        const response = await axios.get(`${API_BASE}/status/${sessionId}`);
+                        setStatus(response.data);
+                        setTrainingProgress(response.data.progress);
+
+                        if (response.data.status === "ready") {
+                            clearInterval(pollInterval);
+                            setMessage("Training completed successfully!");
+                            setLoading(false);
+                        } else if (response.data.status === "error") {
+                            clearInterval(pollInterval);
+                            setMessage(`Training failed: ${response.data.error}`);
+                            setLoading(false);
+                        }
+                    }, 2000);
+                } catch (error) {
+                    setMessage(
+                        error.response?.data?.detail || "Training failed"
+                    );
+                    setLoading(false);
+                }
+            };
+
+            const handleGenerate = async () => {
+                if (!sessionId) return;
+
+                setLoading(true);
+                try {
+                    const response = await axios.post(`${API_BASE}/generate`, {
+                        session_id: sessionId,
+                        seed: seed,
+                        max_length: 500,
+                        temperature: 0.7,
+                        top_k: 50,
+                        top_p: 0.9,
+                    });
+                    setGenerated(response.data.generated);
+                    setMessage("Text generated successfully!");
+                } catch (error) {
+                    setMessage(
+                        error.response?.data?.detail || "Generation failed"
+                    );
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const handleReset = async () => {
+                if (!sessionId) return;
+                if (!confirm("Reset will clear all data. Continue?")) return;
+
+                try {
+                    await axios.post(`${API_BASE}/reset/${sessionId}`);
+                    setMessage("Session reset successfully");
+                    setGenerated("");
+                    setTrainingProgress(0);
+                    checkStatus();
+                } catch (error) {
+                    setMessage("Reset failed");
+                }
+            };
+
+            const handleNewSession = () => {
+                createSession();
+                setFile(null);
+                setGenerated("");
+                setTrainingProgress(0);
+                setMessage("");
+            };
+
+            return (
+                <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+                    <div className="w-full max-w-6xl mx-auto p-4">
+                        <div className="text-center mb-8">
+                            <h1 className="text-5xl font-bold mb-2 text-indigo-900">
+                                Finnish Culture LLM v2.0
+                            </h1>
+                            <p className="text-gray-600">
+                                Production-ready transformer with proper architecture
+                            </p>
+                        </div>
+
+                        {sessionId && status && (
+                            <div className="bg-white p-4 rounded-lg shadow mb-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <div className="border-l-4 border-blue-500 pl-4">
+                                    <div className="text-xs text-gray-600">Session</div>
+                                    <div className="font-mono text-sm">{sessionId}</div>
+                                </div>
+                                <div className="border-l-4 border-green-500 pl-4">
+                                    <div className="text-xs text-gray-600">Status</div>
+                                    <div className={`font-semibold ${
+                                        status.status === 'ready' ? 'text-green-600' :
+                                        status.status === 'training' ? 'text-yellow-600' :
+                                        'text-gray-600'
+                                    }`}>
+                                        {status.status.charAt(0).toUpperCase() + status.status.slice(1)}
+                                    </div>
+                                </div>
+                                <div className="border-l-4 border-purple-500 pl-4">
+                                    <div className="text-xs text-gray-600">Progress</div>
+                                    <div className="font-semibold text-purple-600">{status.progress}%</div>
+                                </div>
+                                <div className="border-l-4 border-orange-500 pl-4">
+                                    <div className="text-xs text-gray-600">Device</div>
+                                    <div className="font-mono text-sm">{status.device}</div>
+                                </div>
+                            </div>
+                        )}
+
+                        {status?.status === 'training' && (
+                            <div className="bg-white p-4 rounded-lg shadow mb-6">
+                                <div className="flex justify-between items-center mb-2">
+                                    <span className="font-semibold">Training Progress</span>
+                                    <span className="text-sm text-gray-600">{trainingProgress}%</span>
+                                </div>
+                                <div className="w-full bg-gray-200 rounded-full h-3">
+                                    <div
+                                        className="bg-gradient-to-r from-blue-500 to-indigo-600 h-3 rounded-full transition-all duration-300"
+                                        style={{ width: `${trainingProgress}%` }}
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="grid md:grid-cols-2 gap-4 mb-6">
+                            <div className="bg-white p-6 rounded-lg shadow-md">
+                                <h2 className="text-xl font-bold mb-4 text-indigo-800">Step 1: Upload Data</h2>
+                                <p className="text-sm text-gray-600 mb-4">
+                                    Upload Finnish texts (.txt), PDFs, or images (.jpg, .png) for OCR.
+                                    Max 50MB per file, 500MB total.
+                                </p>
+                                <input
+                                    type="file"
+                                    accept=".txt,.pdf,.jpg,.jpeg,.png"
+                                    onChange={handleFileChange}
+                                    disabled={loading || status?.status === 'training'}
+                                    className="mb-4 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+                                />
+                                <button
+                                    onClick={handleUpload}
+                                    disabled={loading || !file || !sessionId || status?.status === 'training'}
+                                    className="w-full bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition"
+                                >
+                                    {loading ? "Uploading..." : "Upload File"}
+                                </button>
+                            </div>
+
+                            <div className="bg-white p-6 rounded-lg shadow-md">
+                                <h2 className="text-xl font-bold mb-4 text-indigo-800">Step 2: Train Model</h2>
+                                <p className="text-sm text-gray-600 mb-4">
+                                    Train on uploaded data (1000+ chars). Uses improved architecture:
+                                    12 layers, proper causal masking, cosine annealing.
+                                </p>
+                                <div className="space-y-2">
+                                    <button
+                                        onClick={handleTrain}
+                                        disabled={
+                                            loading ||
+                                            !sessionId ||
+                                            status?.status === 'training' ||
+                                            (status && status.status !== 'idle')
+                                        }
+                                        className="w-full bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition"
+                                    >
+                                        {loading ? "Training..." : "Start Training"}
+                                    </button>
+                                    <button
+                                        onClick={handleReset}
+                                        disabled={loading || !sessionId}
+                                        className="w-full bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition text-sm"
+                                    >
+                                        Reset Session
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-white p-6 rounded-lg shadow-md mb-6">
+                            <h2 className="text-xl font-bold mb-4 text-indigo-800">Step 3: Generate Text</h2>
+                            <p className="text-sm text-gray-600 mb-4">
+                                Generate Finnish text. Model must be trained first.
+                            </p>
+                            <div className="space-y-3">
+                                <input
+                                    type="text"
+                                    value={seed}
+                                    onChange={(e) => setSeed(e.target.value)}
+                                    placeholder="Enter seed text"
+                                    disabled={loading || !sessionId || (status && status.status !== 'ready')}
+                                    className="border border-gray-300 p-3 w-full rounded focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                />
+                                <button
+                                    onClick={handleGenerate}
+                                    disabled={
+                                        loading ||
+                                        !sessionId ||
+                                        !status ||
+                                        status.status !== 'ready'
+                                    }
+                                    className="w-full bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition"
+                                >
+                                    {loading ? "Generating..." : "Generate Text"}
+                                </button>
+                            </div>
+                        </div>
+
+                        {message && (
+                            <div
+                                className={`p-4 rounded-lg mb-6 ${
+                                    message.includes("Success") ||
+                                    message.includes("successfully") ||
+                                    message.includes("completed")
+                                        ? "bg-green-100 text-green-800 border border-green-300"
+                                        : "bg-red-100 text-red-800 border border-red-300"
+                                }`}
+                            >
+                                {message}
+                            </div>
+                        )}
+
+                        {generated && (
+                            <div className="bg-white p-6 rounded-lg shadow-md mb-6">
+                                <h3 className="text-lg font-bold mb-4 text-indigo-800">Generated Text</h3>
+                                <div className="bg-gray-50 p-4 rounded border border-gray-200 max-h-96 overflow-y-auto">
+                                    <p className="whitespace-pre-wrap font-serif text-gray-800 leading-relaxed">
+                                        {generated}
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="text-center mb-4">
+                            <button
+                                onClick={handleNewSession}
+                                disabled={loading}
+                                className="text-sm text-indigo-600 hover:text-indigo-800 underline"
+                            >
+                                New Session
+                            </button>
+                        </div>
+
+                        <div className="bg-indigo-50 p-4 rounded-lg text-sm text-gray-700 border border-indigo-200">
+                            <strong>Improvements in v2.0:</strong>
+                            <ul className="list-disc pl-5 mt-2 space-y-1">
+                                <li>Proper TransformerDecoder with causal masking (no cheating on future tokens)</li>
+                                <li>Sinusoidal positional embeddings (better generalization)</li>
+                                <li>Per-session isolation (multi-user safe)</li>
+                                <li>Background training with progress tracking</li>
+                                <li>File size limits and validation</li>
+                                <li>Fixed tokenizer training (full text, not chunks)</li>
+                                <li>Improved generation (temperature, top-k, nucleus sampling)</li>
+                                <li>Security hardened (CORS restricted, debug off, production config)</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        ReactDOM.render(<App />, document.getElementById("root"));
+    </script>
+</body>
+</html>
