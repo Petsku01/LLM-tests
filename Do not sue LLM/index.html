@@ -1,43 +1,4 @@
-<script type="text/javascript">
-        var gk_isXlsx = false;
-        var gk_xlsxFileLookup = {};
-        var gk_fileData = {};
-        function filledCell(cell) {
-          return cell !== '' && cell != null;
-        }
-        function loadFileData(filename) {
-        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
-            try {
-                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
-                var firstSheetName = workbook.SheetNames[0];
-                var worksheet = workbook.Sheets[firstSheetName];
-
-                // Convert sheet to JSON to filter blank rows
-                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
-                // Filter out blank rows (rows where all cells are empty, null, or undefined)
-                var filteredData = jsonData.filter(row => row.some(filledCell));
-
-                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
-                var headerRowIndex = filteredData.findIndex((row, index) =>
-                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
-                );
-                // Fallback
-                if (headerRowIndex === -1 || headerRowIndex > 25) {
-                  headerRowIndex = 0;
-                }
-
-                // Convert filtered JSON back to CSV
-                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
-                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
-                return csv;
-            } catch (e) {
-                console.error(e);
-                return "";
-            }
-        }
-        return gk_fileData[filename] || "";
-        }
-        </script><!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -60,6 +21,21 @@
             const [generated, setGenerated] = useState('');
             const [trainingLog, setTrainingLog] = useState([]);
             const [message, setMessage] = useState('');
+            const [status, setStatus] = useState(null);
+            const [loading, setLoading] = useState(false);
+
+            useEffect(() => {
+                checkStatus();
+            }, []);
+
+            const checkStatus = async () => {
+                try {
+                    const response = await axios.get('http://localhost:5000/status');
+                    setStatus(response.data);
+                } catch (error) {
+                    console.error('Status check failed:', error);
+                }
+            };
 
             const handleFileChange = (e) => {
                 setFile(e.target.files[0]);
@@ -70,93 +46,177 @@
                     setMessage('Please select a file');
                     return;
                 }
+                setLoading(true);
                 const formData = new FormData();
                 formData.append('file', file);
                 try {
                     const response = await axios.post('http://localhost:5000/upload', formData);
-                    setMessage(response.data.message);
+                    setMessage(`Success: ${response.data.message}. Total: ${response.data.total_chars} characters`);
+                    checkStatus();
                 } catch (error) {
                     setMessage(error.response?.data.error || 'Upload failed');
+                } finally {
+                    setLoading(false);
                 }
             };
 
             const handleTrain = async () => {
                 setTrainingLog([]);
+                setLoading(true);
+                setMessage('Training started... This may take several minutes.');
                 try {
                     const response = await axios.post('http://localhost:5000/train');
                     setTrainingLog(response.data.log);
-                    setMessage('Training completed');
+                    setMessage('Training completed successfully!');
+                    checkStatus();
                 } catch (error) {
                     setMessage(error.response?.data.error || 'Training failed');
+                } finally {
+                    setLoading(false);
                 }
             };
 
             const handleGenerate = async () => {
+                setLoading(true);
                 try {
                     const response = await axios.post('http://localhost:5000/generate', { seed });
                     setGenerated(response.data.generated);
-                    setMessage('Text generated');
+                    setMessage('Text generated successfully!');
+                } catch (error) {
+                    setMessage(error.response?.data.error || 'Generation failed');
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const handleReset = async () => {
+                if (confirm('Reset will clear all uploaded data and trained models. Continue?')) {
+                    setLoading(true);
+                    try {
+                        await axios.post('http://localhost:5000/reset');
+                        setMessage('System reset successfully');
+                        setTrainingLog([]);
+                        setGenerated('');
+                        checkStatus();
+                    } catch (error) {
+                        setMessage('Reset failed');
+                    } finally {
+                        setLoading(false);
+                    }
+                }
+            };
                 } catch (error) {
                     setMessage(error.response?.data.error || 'Generation failed');
                 }
             };
 
             return (
-                <div className="min-h-screen bg-gray-100 flex flex-col items-center p-4">
-                    <h1 className="text-3xl font-bold mb-4">Finnish Culture LLM</h1>
-                    <div className="bg-white p-6 rounded shadow-md w-full max-w-md">
-                        <h2 className="text-xl mb-2">Upload Finnish Texts or Media</h2>
-                        <p className="text-sm text-gray-600 mb-2">
-                            Upload .txt, .pdf, or .jpg/.jpeg/.png files containing Finnish literature, history, or cultural texts. PDFs and images are processed for text extraction.
-                        </p>
-                        <input
-                            type="file"
-                            accept=".txt,.pdf,.jpg,.jpeg,.png"
-                            onChange={handleFileChange}
-                            className="mb-2"
-                        />
-                        <button
-                            onClick={handleUpload}
-                            className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 mb-4"
-                        >
-                            Upload
-                        </button>
-                        <h2 className="text-xl mb-2">Train Model</h2>
-                        <button
-                            onClick={handleTrain}
-                            className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 mb-4"
-                        >
-                            Start Training
-                        </button>
-                        <h2 className="text-xl mb-2">Generate Text</h2>
-                        <input
-                            type="text"
-                            value={seed}
-                            onChange={(e) => setSeed(e.target.value)}
-                            className="border p-2 w-full mb-2"
-                            placeholder="Enter seed text (e.g., Väinämöinen, vanha viisas)"
-                        />
-                        <button
-                            onClick={handleGenerate}
-                            className="bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600 mb-4"
-                        >
-                            Generate
-                        </button>
-                        {message && <p className="text-red-500">{message}</p>}
-                        {trainingLog.length > 0 && (
-                            <div className="mt-4">
-                                <h3 className="text-lg">Training Log</h3>
-                                <ul className="list-disc pl-5">
-                                    {trainingLog.map((log, index) => (
-                                        <li key={index}>{log}</li>
-                                    ))}
-                                </ul>
+                <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex flex-col items-center p-4">
+                    <div className="w-full max-w-4xl">
+                        <h1 className="text-4xl font-bold mb-2 text-center text-indigo-900">Finnish Culture LLM</h1>
+                        <p className="text-center text-gray-600 mb-6">Train a custom language model on Finnish texts</p>
+                        
+                        {status && (
+                            <div className="bg-white p-4 rounded-lg shadow mb-4">
+                                <h3 className="font-bold mb-2">System Status</h3>
+                                <div className="grid grid-cols-2 gap-2 text-sm">
+                                    <div>Model Trained: <span className={status.model_trained ? 'text-green-600' : 'text-red-600'}>{status.model_trained ? 'Yes' : 'No'}</span></div>
+                                    <div>Device: <span className="font-mono">{status.device}</span></div>
+                                    <div>Dataset Size: <span className="font-mono">{status.dataset_size} chars</span></div>
+                                    <div>CUDA: <span className={status.cuda_available ? 'text-green-600' : 'text-orange-600'}>{status.cuda_available ? 'Available' : 'CPU Only'}</span></div>
+                                </div>
                             </div>
                         )}
+
+                        <div className="grid md:grid-cols-2 gap-4 mb-4">
+                            <div className="bg-white p-6 rounded-lg shadow-md">
+                                <h2 className="text-xl font-bold mb-3 text-indigo-800">1. Upload Data</h2>
+                                <p className="text-sm text-gray-600 mb-3">
+                                    Upload Finnish texts (.txt), PDFs, or images (.jpg, .png) for OCR processing.
+                                </p>
+                                <input
+                                    type="file"
+                                    accept=".txt,.pdf,.jpg,.jpeg,.png"
+                                    onChange={handleFileChange}
+                                    className="mb-3 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+                                    disabled={loading}
+                                />
+                                <button
+                                    onClick={handleUpload}
+                                    disabled={loading || !file}
+                                    className="w-full bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition"
+                                >
+                                    {loading ? 'Uploading...' : 'Upload File'}
+                                </button>
+                            </div>
+
+                            <div className="bg-white p-6 rounded-lg shadow-md">
+                                <h2 className="text-xl font-bold mb-3 text-indigo-800">2. Train Model</h2>
+                                <p className="text-sm text-gray-600 mb-3">
+                                    Train the model on uploaded data. Requires at least 1000 characters. Takes 30-60 minutes on GPU.
+                                </p>
+                                <button
+                                    onClick={handleTrain}
+                                    disabled={loading || (status && status.dataset_size < 1000)}
+                                    className="w-full bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition mb-2"
+                                >
+                                    {loading ? 'Training...' : 'Start Training'}
+                                </button>
+                                <button
+                                    onClick={handleReset}
+                                    disabled={loading}
+                                    className="w-full bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition text-sm"
+                                >
+                                    Reset All Data
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="bg-white p-6 rounded-lg shadow-md mb-4">
+                            <h2 className="text-xl font-bold mb-3 text-indigo-800">3. Generate Text</h2>
+                            <p className="text-sm text-gray-600 mb-3">
+                                Enter a seed phrase to generate Finnish text. Model must be trained first.
+                            </p>
+                            <input
+                                type="text"
+                                value={seed}
+                                onChange={(e) => setSeed(e.target.value)}
+                                className="border border-gray-300 p-2 w-full mb-3 rounded focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                placeholder="Enter seed text (e.g., Väinämöinen, vanha viisas)"
+                                disabled={loading}
+                            />
+                            <button
+                                onClick={handleGenerate}
+                                disabled={loading || (status && !status.model_trained)}
+                                className="w-full bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition"
+                            >
+                                {loading ? 'Generating...' : 'Generate Text'}
+                            </button>
+                        </div>
+
+                        {message && (
+                            <div className={`p-4 rounded-lg mb-4 ${message.includes('Success') || message.includes('completed') ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                {message}
+                            </div>
+                        )}
+
+                        {trainingLog.length > 0 && (
+                            <div className="bg-white p-6 rounded-lg shadow-md mb-4">
+                                <h3 className="text-lg font-bold mb-2">Training Log</h3>
+                                <div className="bg-gray-50 p-3 rounded max-h-60 overflow-y-auto">
+                                    {trainingLog.map((log, index) => (
+                                        <div key={index} className="text-sm font-mono mb-1">{log}</div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
                         {generated && (
-                            <div className="mt-4">
-                                <h3 className="text-lg">Generated Text</h3>
-                                <p className="whitespace-pre-wrap">{generated}</p>
+                            <div className="bg-white p-6 rounded-lg shadow-md">
+                                <h3 className="text-lg font-bold mb-2">Generated Text</h3>
+                                <div className="bg-gray-50 p-4 rounded whitespace-pre-wrap font-serif text-gray-800">
+                                    {generated}
+                                </div>
                             </div>
                         )}
                     </div>

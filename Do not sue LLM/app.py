@@ -8,18 +8,27 @@ from tokenizers.models import BPE
 from tokenizers.trainers import BpeTrainer
 from tokenizers.pre_tokenizers import Whitespace
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 from werkzeug.utils import secure_filename
 from tqdm import tqdm
 import numpy as np
 import PyPDF2
 from PIL import Image
 import pytesseract
+import json
+import logging
+
+logging.basicConfig(level=logging.INFO)
 
 # Flask setup
 app = Flask(__name__)
+CORS(app)
 UPLOAD_FOLDER = 'uploads'
+MODEL_FOLDER = 'models'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(MODEL_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MODEL_FOLDER'] = MODEL_FOLDER
 ALLOWED_EXTENSIONS = {'txt', 'pdf', 'jpg', 'jpeg', 'png'}
 
 # Parmeters
@@ -106,11 +115,21 @@ def train_tokenizer(text):
     global tokenizer
     tokenizer = Tokenizer(BPE())
     tokenizer.pre_tokenizer = Whitespace()
-    trainer = BpeTrainer(vocab_size=vocab_size, special_tokens=["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"])
-    tokenizer.train_from_iterator([text], trainer)
+    trainer = BpeTrainer(
+        vocab_size=vocab_size,
+        special_tokens=["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"],
+        min_frequency=2
+    )
+    # Split text into chunks for better training
+    text_chunks = [text[i:i+10000] for i in range(0, len(text), 10000)]
+    tokenizer.train_from_iterator(text_chunks, trainer)
+    # Save tokenizer
+    tokenizer.save(os.path.join(app.config['MODEL_FOLDER'], 'tokenizer.json'))
 
 # Tokenize text
 def tokenize(text):
+    if tokenizer is None:
+        raise ValueError("Tokenizer not initialized. Please train first.")
     encoded = tokenizer.encode(text)
     return encoded.ids
 
@@ -176,7 +195,8 @@ def train_model():
         total_loss = 0
         num_batches = 0
         
-        for inputs, targets in get_batches(tokens, batch_size, context_length):
+        batches = list(get_batches(tokens, batch_size, context_length))
+        for inputs, targets in tqdm(batches, desc=f"Epoch {epoch+1}/{num_epochs}"):
             optimizer.zero_grad()
             if scaler:
                 with torch.cuda.amp.autocast():
@@ -198,8 +218,22 @@ def train_model():
             total_loss += loss.item()
             num_batches += 1
         
-        avg_loss = total_loss / num_batches
-        training_log.append(f"Epoch {epoch + 1}, Average Loss: {avg_loss:.4f}")
+        avg_loss = total_loss / num_batches if num_batches > 0 else 0
+        log_msg = f"Epoch {epoch + 1}/{num_epochs}, Average Loss: {avg_loss:.4f}"
+        logging.info(log_msg)
+        training_log.append(log_msg)
+    
+    # Save model
+    model_path = os.path.join(app.config['MODEL_FOLDER'], 'model.pt')
+    torch.save({
+        'model_state_dict': model.state_dict(),
+        'vocab_size': vocab_size,
+        'embed_dim': embed_dim,
+        'num_layers': num_layers,
+        'num_heads': num_heads,
+        'ff_dim': ff_dim
+    }, model_path)
+    logging.info(f"Model saved to {model_path}")
     
     return training_log
 
@@ -207,37 +241,113 @@ def train_model():
 @app.route('/upload', methods=['POST'])
 def upload_file():
     global dataset_text
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file part'}), 400
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'error': 'No selected file'}), 400
-    if file and allowed_file(file.filename):
-        filename = secure_filename(file.filename)
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(filepath)
-        text = process_file(filepath)
-        if text:
-            dataset_text += text + "\n"
-            return jsonify({'message': f'File {filename} processed, {len(text)} characters extracted'}), 200
-        return jsonify({'error': 'No text extracted'}), 400
-    return jsonify({'error': 'Invalid file type'}), 400
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file part'}), 400
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'error': 'No selected file'}), 400
+        if file and allowed_file(file.filename):
+            filename = secure_filename(file.filename)
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(filepath)
+            text = process_file(filepath)
+            if text:
+                dataset_text += text + "\n"
+                logging.info(f"File {filename} processed: {len(text)} chars, total dataset: {len(dataset_text)} chars")
+                return jsonify({
+                    'message': f'File {filename} processed',
+                    'chars_extracted': len(text),
+                    'total_chars': len(dataset_text)
+                }), 200
+            return jsonify({'error': 'No text extracted from file'}), 400
+        return jsonify({'error': f'Invalid file type. Allowed: {ALLOWED_EXTENSIONS}'}), 400
+    except Exception as e:
+        logging.error(f"Upload error: {str(e)}")
+        return jsonify({'error': f'Upload failed: {str(e)}'}), 500
 
 @app.route('/train', methods=['POST'])
 def train():
     global dataset_text
-    if not dataset_text:
-        return jsonify({'error': 'No dataset available'}), 400
-    train_tokenizer(dataset_text)
-    log = train_model()
-    return jsonify({'log': log}), 200
+    try:
+        if not dataset_text:
+            return jsonify({'error': 'No dataset available. Please upload files first.'}), 400
+        if len(dataset_text) < 1000:
+            return jsonify({'error': f'Dataset too small ({len(dataset_text)} chars). Need at least 1000 characters.'}), 400
+        
+        logging.info(f"Starting training with {len(dataset_text)} characters")
+        train_tokenizer(dataset_text)
+        log = train_model()
+        return jsonify({
+            'log': log,
+            'message': 'Training completed successfully',
+            'dataset_size': len(dataset_text)
+        }), 200
+    except Exception as e:
+        logging.error(f"Training error: {str(e)}")
+        return jsonify({'error': f'Training failed: {str(e)}'}), 500
 
 @app.route('/generate', methods=['POST'])
 def generate_text():
-    data = request.get_json()
-    seed = data.get('seed', 'Väinämöinen, vanha viisas')
-    generated = generate(seed)
-    return jsonify({'generated': generated}), 200
+    global model, tokenizer
+    try:
+        if model is None:
+            return jsonify({'error': 'Model not trained. Please train first.'}), 400
+        if tokenizer is None:
+            return jsonify({'error': 'Tokenizer not initialized. Please train first.'}), 400
+        
+        data = request.get_json()
+        seed = data.get('seed', 'Väinämöinen, vanha viisas')
+        max_length = data.get('max_length', 200)
+        
+        logging.info(f"Generating text from seed: {seed[:50]}...")
+        generated = generate(seed, max_length)
+        return jsonify({
+            'generated': generated,
+            'seed': seed,
+            'length': len(generated)
+        }), 200
+    except Exception as e:
+        logging.error(f"Generation error: {str(e)}")
+        return jsonify({'error': f'Generation failed: {str(e)}'}), 500
+
+@app.route('/status', methods=['GET'])
+def status():
+    """Check system status."""
+    return jsonify({
+        'model_trained': model is not None,
+        'tokenizer_ready': tokenizer is not None,
+        'dataset_size': len(dataset_text),
+        'device': str(device),
+        'cuda_available': torch.cuda.is_available()
+    }), 200
+
+@app.route('/reset', methods=['POST'])
+def reset():
+    """Reset dataset and model."""
+    global dataset_text, model, tokenizer
+    dataset_text = ""
+    model = None
+    tokenizer = None
+    return jsonify({'message': 'System reset successfully'}), 200
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    # Try to load existing model and tokenizer
+    model_path = os.path.join(MODEL_FOLDER, 'model.pt')
+    tokenizer_path = os.path.join(MODEL_FOLDER, 'tokenizer.json')
+    
+    if os.path.exists(model_path) and os.path.exists(tokenizer_path):
+        try:
+            logging.info("Loading existing model and tokenizer...")
+            checkpoint = torch.load(model_path)
+            model = TransformerLLM().to(device)
+            model.load_state_dict(checkpoint['model_state_dict'])
+            model.eval()
+            tokenizer = Tokenizer.from_file(tokenizer_path)
+            logging.info("Model and tokenizer loaded successfully")
+        except Exception as e:
+            logging.warning(f"Failed to load model: {e}")
+    
+    logging.info(f"Starting server on http://localhost:5000")
+    logging.info(f"Device: {device}")
+    app.run(debug=True, host='0.0.0.0', port=5000)

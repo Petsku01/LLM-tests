@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# Flask
+instance/
+.webassets-cache
+
+# Uploads and models
+uploads/
+models/
+*.pt
+*.pth
+
+# Environment
+.env
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Logs
+*.log
