@@ -4,7 +4,7 @@ A modern, secure, scalable transformer-based language model for Finnish text gen
 
 ## What's New in v2.0
 
-### 🏗️ Architecture Improvements
+### Architecture Improvements
 - **TransformerDecoder** with causal masking (proper for generation, not encoder cheating)
 - **Sinusoidal positional embeddings** (better generalization than learned embeddings)
 - **Residual connections** (proper deep network training)
@@ -20,14 +20,14 @@ A modern, secure, scalable transformer-based language model for Finnish text gen
 - **Debug mode disabled** (production config)
 - **Error handling** (proper exceptions, no stack trace leaks)
 
-### 📊 Performance & Scalability
+### Performance & Scalability
 - **Background training** (non-blocking, progress tracking)
 - **Improved tokenization** (trained on full text, not chunks)
 - **Efficient batch generation** (generator-based, memory efficient)
 - **Better generation** (temperature, top-k, nucleus sampling)
 - **Structured logging** (file + console, timestamped)
 
-### 🚀 User Experience
+### User Experience
 - **Real-time progress** (trains in background, UI updates)
 - **Multiple file formats** (.txt, .pdf, .jpg, .png with OCR)
 - **Session management** (separate sessions for different users)
@@ -204,10 +204,10 @@ Response: {
 ## Scaling Path
 
 ### Short Term (Ready Now)
-- ✅ Per-session multi-user support
-- ✅ Background training
-- ✅ Input validation and limits
-- ✅ Proper security hardening
+- Per-session multi-user support
+- Background training
+- Input validation and limits
+- Proper security hardening
 
 ### Medium Term (Add Next)
 - Add PostgreSQL for persistence
@@ -271,12 +271,12 @@ Do not sue LLM/
 ## Security Notes
 
 ### What's Fixed
-- ✅ CORS restricted to localhost
-- ✅ File size limits enforced
-- ✅ Input validation on all parameters
-- ✅ No debug mode in production
-- ✅ Proper error messages (no stack traces)
-- ✅ Per-session isolation (no data mixing)
+- CORS restricted to localhost
+- File size limits enforced
+- Input validation on all parameters
+- No debug mode in production
+- Proper error messages (no stack traces)
+- Per-session isolation (no data mixing)
 
 ### What's Still Needed (for production)
 - User authentication (JWT tokens)

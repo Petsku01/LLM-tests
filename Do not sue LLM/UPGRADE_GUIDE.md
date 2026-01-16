@@ -109,7 +109,7 @@ FastAPI (async-ready)
 
 ## Production Readiness
 
-### ✅ What's Ready
+### What's Ready
 - Proper ML architecture
 - Security hardening
 - Multi-user support
@@ -120,7 +120,7 @@ FastAPI (async-ready)
 - Session management
 - File management
 
-### ⚠️ What's Still Needed
+### What's Still Needed
 - User authentication (JWT)
 - Rate limiting
 - HTTPS/TLS
